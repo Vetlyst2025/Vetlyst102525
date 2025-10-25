@@ -69,6 +69,7 @@ const ClinicDetail: React.FC<ClinicDetailProps> = ({ clinic, onBack }) => {
                     alt={clinic.name} 
                     className="w-full h-full object-cover"
                     onError={() => setImageError(true)}
+                    loading="lazy"
                 />
             ) : (
                 <Hospital className="h-16 w-16 text-slate-500" />

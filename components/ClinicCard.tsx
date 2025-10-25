@@ -60,6 +60,7 @@ const ClinicCard: React.FC<ClinicCardProps> = ({ clinic, onSelect }) => {
             alt={clinic.name} 
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
             onError={() => setImageError(true)}
+            loading="lazy"
           />
         ) : (
           <Hospital className="h-12 w-12 text-slate-500" />
