@@ -8,12 +8,31 @@ const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 // Helper function to safely parse JSON from a Gemini response
 const safelyParseJsonResponse = (response: GenerateContentResponse): any => {
   try {
-    const jsonString = response.text?.trim();
-    if (jsonString) {
-      // Sometimes the model returns markdown with JSON inside, like ```json ... ```
-      const cleanedJsonString = jsonString.replace(/^```json\s*|```$/g, '');
-      return JSON.parse(cleanedJsonString);
+    const text = response.text?.trim();
+    if (!text) {
+        return null;
     }
+
+    // Find the start of the JSON array. The model sometimes adds introductory text.
+    const startIndex = text.indexOf('[');
+    if (startIndex === -1) {
+        console.warn("Could not find the start of a JSON array `[` in the response.", text);
+        return null;
+    }
+
+    // Find the end of the JSON array.
+    const endIndex = text.lastIndexOf(']');
+    if (endIndex === -1) {
+        console.warn("Could not find the end of a JSON array `]` in the response.", text);
+        return null;
+    }
+
+    // Extract just the JSON part of the string.
+    const jsonString = text.substring(startIndex, endIndex + 1);
+    
+    // Now, attempt to parse the extracted string.
+    return JSON.parse(jsonString);
+
   } catch (error) {
     console.error("Failed to parse JSON response:", response.text, error);
   }
@@ -36,89 +55,41 @@ export async function fetchClinics(): Promise<Clinic[]> {
   }
 
   console.log("No valid cache found. Fetching fresh clinic data from Gemini API.");
-  const COUNTY_NAME = 'Dane County, Wisconsin'; // Variable for easy duplication to new cities
+  const COUNTY_NAME = 'Dane County, Wisconsin';
 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
-    // --- Step 2: Use grounding tools to find clinic information as text ---
-    const findClinicsPrompt = `
-      Use your search and map tools to find comprehensive information about all veterinary clinics with a physical address in ${COUNTY_NAME}.
-      For each clinic, list all of the following details you can find:
-      - Name
-      - Full street address
-      - City
-      - Phone number
-      - Hours of operation (e.g., 'Mon-Fri 8am-5pm, Sat 9am-12pm')
-      - A link to their official website
-      - A URL for a high-quality, publicly available photo (from their website or business listing).
-      - Relevant service categories. Prioritize terms like "Emergency", "Urgent Care", or "24-Hour". If none of those apply, use "General Practice".
-      - Google Maps star rating (as a number, e.g., 4.7)
-      - The total number of Google reviews (as a number, e.g., 152)
-      - A direct link to their Google Maps listing.
-      
-      Present this as a clear, well-formatted list. Do not use JSON for this step.
+    // --- Step 2: A single, robust call to find and structure clinic data ---
+    const findAndFormatPrompt = `
+      Use your search and map tools to perform an exhaustive search and create a complete directory of all veterinary clinics with a physical address in ${COUNTY_NAME}.
+      It is critical that you find as many unique clinics as possible and do not provide a summarized or truncated list.
+      For each clinic, provide all of the following details you can find, formatted as a JSON array of objects:
+      - name: The clinic's name.
+      - address: The full street address.
+      - city: The city.
+      - phone: The phone number.
+      - hours: Hours of operation (e.g., 'Mon-Fri 8am-5pm, Sat 9am-12pm').
+      - websiteUrl: A link to their official website.
+      - photoUrl: A URL for a high-quality, publicly available photo (from their website or business listing).
+      - categories: An array of relevant service categories. Prioritize terms like "Emergency", "Urgent Care", or "24-Hour". If none of those apply, use "General Practice".
+      - googleRating: Google Maps star rating (as a number, e.g., 4.7).
+      - googleReviewCount: The total number of Google reviews (as a number, e.g., 152).
+      - googleMapsUrl: A direct link to their Google Maps listing.
     `;
 
-    const findResponse = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
-      contents: findClinicsPrompt,
-      config: {
-        tools: [{googleMaps: {}}, {googleSearch: {}}],
-      },
-    });
-
-    const clinicInfoText = findResponse.text;
-    if (!clinicInfoText || clinicInfoText.trim() === '') {
-        throw new Error("Gemini API did not return any clinic information in the first step.");
-    }
-
-    // --- Step 3: Format the unstructured text into reliable JSON ---
-    const formatJsonPrompt = `
-      Based on the following text, extract the information for each veterinary clinic and format it as a valid JSON array of objects.
-      Each object must conform to the provided schema.
-      
-      Here is the text to process:
-      ---
-      ${clinicInfoText}
-      ---
-    `;
-    
-    const formatResponse = await ai.models.generateContent({
+    const response = await ai.models.generateContent({
         model: "gemini-2.5-pro",
-        contents: formatJsonPrompt,
+        contents: findAndFormatPrompt,
         config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        name: { type: Type.STRING },
-                        address: { type: Type.STRING },
-                        city: { type: Type.STRING },
-                        phone: { type: Type.STRING },
-                        hours: { type: Type.STRING },
-                        websiteUrl: { type: Type.STRING },
-                        categories: {
-                            type: Type.ARRAY,
-                            items: { type: Type.STRING }
-                        },
-                        photoUrl: { type: Type.STRING },
-                        googleRating: { type: Type.NUMBER },
-                        googleReviewCount: { type: Type.INTEGER },
-                        googleMapsUrl: { type: Type.STRING }
-                    },
-                    required: ["name", "address", "city", "phone", "categories"]
-                }
-            }
+            tools: [{googleMaps: {}}, {googleSearch: {}}],
         }
     });
 
-    const parsedData = safelyParseJsonResponse(formatResponse);
+    const parsedData = safelyParseJsonResponse(response);
     
-    if (!parsedData || !Array.isArray(parsedData)) {
-        console.error("Received invalid or empty data from Gemini API on formatting step", parsedData);
+    if (!parsedData || !Array.isArray(parsedData) || parsedData.length === 0) {
+        console.error("Received invalid or empty data from Gemini API", parsedData);
         throw new Error("Could not parse clinic information from the API response.");
     }
     
@@ -142,7 +113,7 @@ export async function fetchClinics(): Promise<Clinic[]> {
       }
     });
     
-    // --- Step 4: Enrich data with targeted follow-up calls for missing websites ---
+    // --- Step 3: Enrich data with targeted follow-up calls for missing websites ---
     const enrichmentPromises: Promise<void>[] = [];
     uniqueClinicsMap.forEach((clinic, key) => {
         const isValidUrl = clinic.websiteUrl && (clinic.websiteUrl.startsWith('http://') || clinic.websiteUrl.startsWith('https://'));
@@ -219,6 +190,51 @@ export async function fetchClinics(): Promise<Clinic[]> {
         };
         uniqueClinicsMap.set(acesKey, acesClinic);
     }
+    
+    // 4. Correct/Add Veterinary Emergency Service (Middleton)
+    const vesName = 'Veterinary Emergency Service';
+    const vesAddress = '1612 N High Point Rd';
+    const vesKey = `${vesName.toLowerCase().trim()}|${vesAddress.toLowerCase().trim()}`;
+
+    let vesExists = false;
+    let existingVesKey: string | null = null;
+
+    // Look for a partial match, as the API might name it slightly differently or have a slightly different address
+    for (const [key, clinic] of uniqueClinicsMap.entries()) {
+        if (key.toLowerCase().includes('veterinary emergency service') && key.toLowerCase().includes('high point')) {
+            vesExists = true;
+            existingVesKey = key;
+            break;
+        }
+    }
+
+    if (vesExists && existingVesKey) {
+        // If it exists, ensure its data is correct
+        const existingClinic = uniqueClinicsMap.get(existingVesKey)!;
+        existingClinic.name = vesName; // Standardize name
+        existingClinic.city = 'Middleton'; // Correct city
+        existingClinic.categories = ['Emergency', 'Urgent Care', '24-Hour'];
+        existingClinic.phone = '(608) 831-1101';
+        existingClinic.websiteUrl = 'https://www.vesmadison.com/';
+        existingClinic.hours = 'Open 24 hours';
+        uniqueClinicsMap.set(existingVesKey, existingClinic);
+        console.log("Corrected existing Veterinary Emergency Service entry.");
+    } else {
+        // If it doesn't exist at all, add it
+        const vesClinic: Clinic = {
+            name: vesName,
+            address: vesAddress,
+            city: 'Middleton',
+            phone: '(608) 831-1101',
+            categories: ['Emergency', 'Urgent Care', '24-Hour'],
+            photoUrl: '',
+            hours: 'Open 24 hours',
+            websiteUrl: 'https://www.vesmadison.com/',
+            googleMapsUrl: 'https://www.google.com/maps/place/Veterinary+Emergency+Service/@43.0711942,-89.518626,17z/data=!3m1!4b1!4m6!3m5!1s0x8807663f42155555:0x87724fa7110c7320!8m2!3d43.0711903!4d-89.5160511!16s%2Fg%2F1tdw1v42?entry=ttu',
+        };
+        uniqueClinicsMap.set(vesKey, vesClinic);
+        console.log("Added missing Veterinary Emergency Service entry.");
+    }
      // --- End of Manual Corrections ---
 
 
@@ -227,11 +243,11 @@ export async function fetchClinics(): Promise<Clinic[]> {
     // Sort clinics alphabetically by name for a consistent order
     uniqueClinics.sort((a, b) => a.name.localeCompare(b.name));
 
-    // --- Step 5: Cache the newly fetched and processed data ---
+    // --- Step 4: Cache the newly fetched and processed data ---
     try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(uniqueClinics));
         localStorage.setItem(TIMESTAMP_KEY, Date.now().toString());
-        console.log("Clinic data fetched from API and cached successfully.");
+        console.log(`Clinic data fetched from API and cached successfully. Found ${uniqueClinics.length} clinics.`);
     } catch (cacheError) {
         console.error("Failed to cache clinic data:", cacheError);
         // This might happen if localStorage is full. The app will still function.

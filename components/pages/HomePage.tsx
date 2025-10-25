@@ -7,10 +7,12 @@ type Page = 'home' | 'directory' | 'forClinics';
 
 interface HomePageProps {
     onNavigate: (page: Page) => void;
+    onSelectClinic: (clinic: Clinic) => void;
     clinics: Clinic[];
+    totalClinics: number;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onNavigate, clinics }) => {
+const HomePage: React.FC<HomePageProps> = ({ onNavigate, onSelectClinic, clinics, totalClinics }) => {
     return (
         <main className="animate-fade-in">
             {/* Hero Section */}
@@ -102,7 +104,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, clinics }) => {
                         <div className="text-center mb-12">
                             <h2 className="text-3xl font-bold text-white">Featured Vets in Dane County</h2>
                              <button onClick={() => onNavigate('directory')} className="mt-4 text-blue-400 font-semibold hover:underline">
-                                View All [NUMBER_OF_CLINICS] Clinics &rarr;
+                                View All {totalClinics} Clinics &rarr;
                             </button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -110,7 +112,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, clinics }) => {
                                 <ClinicCard 
                                     key={`${clinic.name}-${index}`} 
                                     clinic={clinic}
-                                    onSelect={() => onNavigate('directory')}
+                                    onSelect={onSelectClinic}
                                 />
                             ))}
                         </div>

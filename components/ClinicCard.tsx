@@ -26,12 +26,14 @@ const CategoryBubble: React.FC<{ category: string }> = ({ category }) => {
 const ClinicCard: React.FC<ClinicCardProps> = ({ clinic, onSelect }) => {
   const [imageError, setImageError] = useState(false);
 
-  // Reset image error state when the clinic prop changes
   useEffect(() => {
     setImageError(false);
   }, [clinic.photoUrl]);
 
-  // Prioritize showing emergency/urgent categories first
+  const isEmergency = (clinic.categories || []).some(cat =>
+    ['urgent care', 'emergency', '24-hour'].includes(cat.toLowerCase())
+  );
+
   const sortedCategories = [...(clinic.categories || [])].sort((a, b) => {
     if (a === 'Emergency') return -1;
     if (b === 'Emergency') return 1;
@@ -104,10 +106,14 @@ const ClinicCard: React.FC<ClinicCardProps> = ({ clinic, onSelect }) => {
         </div>
         <div className="mt-5 pt-5 border-t border-slate-600">
             <div
-                className="w-full flex items-center justify-center gap-2 bg-blue-900/40 text-blue-300 font-bold py-2 px-4 rounded-md group-hover:bg-blue-800/60 transition-colors"
-                aria-label={`Request an appointment with ${clinic.name}`}
+                className={`w-full flex items-center justify-center gap-2 font-bold py-2 px-4 rounded-md transition-colors ${
+                    isEmergency 
+                        ? 'bg-red-900/40 text-red-300 group-hover:bg-red-800/60' 
+                        : 'bg-blue-900/40 text-blue-300 group-hover:bg-blue-800/60'
+                }`}
+                aria-label={isEmergency ? `View emergency info for ${clinic.name}` : `Request an appointment with ${clinic.name}`}
             >
-                View Details & Request Appointment
+                {isEmergency ? 'View Emergency Info' : 'View Details & Request Appointment'}
                 <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </div>
         </div>

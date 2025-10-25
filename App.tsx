@@ -16,6 +16,7 @@ const App: React.FC = () => {
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
 
   useEffect(() => {
     const loadClinics = async () => {
@@ -33,6 +34,22 @@ const App: React.FC = () => {
     };
     loadClinics();
   }, []);
+  
+  const handleNavigate = (page: Page) => {
+    // Clear any active clinic selection when navigating to a main page
+    if (page === 'directory' || page === 'home' || page === 'forClinics') {
+      setSelectedClinic(null);
+    }
+    setPage(page);
+    window.scrollTo(0, 0);
+  };
+
+  const handleSelectClinic = (clinic: Clinic) => {
+    setSelectedClinic(clinic);
+    setPage('directory'); // Navigate to directory page to show the detail view
+    window.scrollTo(0, 0);
+  };
+
 
   const renderPage = () => {
     if (isLoading) {
@@ -57,21 +74,21 @@ const App: React.FC = () => {
 
     switch (page) {
       case 'home':
-        return <HomePage onNavigate={setPage} clinics={clinics.slice(0, 3)} />;
+        return <HomePage onNavigate={handleNavigate} onSelectClinic={handleSelectClinic} clinics={clinics.slice(0, 3)} totalClinics={clinics.length} />;
       case 'directory':
-        return <DirectoryPage clinics={clinics} />;
+        return <DirectoryPage clinics={clinics} selectedClinic={selectedClinic} onSelectClinic={handleSelectClinic} onClearSelection={() => setSelectedClinic(null)} />;
       case 'forClinics':
-        return <ForClinicsPage onNavigate={setPage} />;
+        return <ForClinicsPage onNavigate={handleNavigate} />;
       default:
-        return <HomePage onNavigate={setPage} clinics={clinics.slice(0, 3)} />;
+        return <HomePage onNavigate={handleNavigate} onSelectClinic={handleSelectClinic} clinics={clinics.slice(0, 3)} totalClinics={clinics.length} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-800 font-sans text-slate-300 flex flex-col">
-      <Header onNavigate={setPage} />
+      <Header onNavigate={handleNavigate} />
       <div className="flex-grow">{renderPage()}</div>
-      <Footer onNavigate={setPage} />
+      <Footer onNavigate={handleNavigate} />
     </div>
   );
 };
