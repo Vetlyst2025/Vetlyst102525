@@ -10,6 +10,7 @@ import LoadingSpinner from './components/LoadingSpinner';
 import { AlertTriangle } from 'lucide-react';
 
 type Page = 'home' | 'directory' | 'forClinics';
+type DataSource = 'supabase' | 'local' | null;
 
 const App: React.FC = () => {
   const [page, setPage] = useState<Page>('home');
@@ -17,14 +18,16 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
+  const [dataSource, setDataSource] = useState<DataSource>(null);
 
   useEffect(() => {
     const loadClinics = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const data = await fetchClinics();
+        const { clinics: data, source } = await fetchClinics();
         setClinics(data);
+        setDataSource(source);
       } catch (err) {
         setError('Failed to fetch clinic data. Please try again later.');
         console.error(err);
@@ -76,7 +79,7 @@ const App: React.FC = () => {
       case 'home':
         return <HomePage onNavigate={handleNavigate} onSelectClinic={handleSelectClinic} clinics={clinics.slice(0, 3)} totalClinics={clinics.length} />;
       case 'directory':
-        return <DirectoryPage clinics={clinics} selectedClinic={selectedClinic} onSelectClinic={handleSelectClinic} onClearSelection={() => setSelectedClinic(null)} />;
+        return <DirectoryPage clinics={clinics} selectedClinic={selectedClinic} onSelectClinic={handleSelectClinic} onClearSelection={() => setSelectedClinic(null)} dataSource={dataSource} />;
       case 'forClinics':
         return <ForClinicsPage onNavigate={handleNavigate} />;
       default:
