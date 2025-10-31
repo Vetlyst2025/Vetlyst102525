@@ -3,7 +3,7 @@ import { Clinic } from '../../types';
 import ClinicCard from '../ClinicCard';
 import ClinicDetail from '../ClinicDetail';
 import SearchBar from '../SearchBar';
-import { PawPrint, AlertTriangle, Info } from 'lucide-react';
+import { PawPrint, AlertTriangle, Info, ArrowDownAZ, Star } from 'lucide-react';
 
 interface DirectoryPageProps {
     clinics: Clinic[];
@@ -16,15 +16,19 @@ interface DirectoryPageProps {
 const DirectoryPage: React.FC<DirectoryPageProps> = ({ clinics, selectedClinic, onSelectClinic, onClearSelection, dataSource }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [emergencyFilterActive, setEmergencyFilterActive] = useState(false);
+    const [sortBy, setSortBy] = useState<'name' | 'rating'>('name');
 
-    const filteredClinics = useMemo(() => {
+    const filteredAndSortedClinics = useMemo(() => {
         let results = clinics;
 
         if (emergencyFilterActive) {
             results = results.filter(clinic => 
-                (clinic.categories || []).some(cat => 
-                    ['urgent care', 'emergency', '24-hour'].includes(cat.toLowerCase())
-                )
+                (clinic.categories || []).some(cat => {
+                    const lowerCat = cat.toLowerCase();
+                    // Use includes() for more robust matching against data variations
+                    // like "Emergency Services", "Urgent", "24 hour", etc.
+                    return lowerCat.includes('urgent') || lowerCat.includes('emergency') || (lowerCat.includes('24') && lowerCat.includes('hour'));
+                })
             );
         }
 
@@ -45,8 +49,24 @@ const DirectoryPage: React.FC<DirectoryPageProps> = ({ clinics, selectedClinic, 
             }
         }
         
-        return results;
-    }, [clinics, searchTerm, emergencyFilterActive]);
+        // Create a shallow copy before sorting to avoid side effects
+        const sortedResults = [...results];
+
+        sortedResults.sort((a, b) => {
+            if (sortBy === 'rating') {
+                // Use -1 to push clinics without a rating to the bottom
+                const ratingA = a.googleRating ?? -1;
+                const ratingB = b.googleRating ?? -1;
+                if (ratingB !== ratingA) {
+                    return ratingB - ratingA; // Higher rating first
+                }
+            }
+            // Default sort by name, or as a fallback for equal ratings
+            return a.name.localeCompare(b.name);
+        });
+
+        return sortedResults;
+    }, [clinics, searchTerm, emergencyFilterActive, sortBy]);
     
     // --- NEW: Enhanced feedback logic ---
     if (clinics.length === 0) {
@@ -114,7 +134,7 @@ const DirectoryPage: React.FC<DirectoryPageProps> = ({ clinics, selectedClinic, 
                             searchTerm={searchTerm}
                             setSearchTerm={setSearchTerm}
                         />
-                        <div className="mt-4 flex justify-center">
+                        <div className="mt-4 flex flex-wrap justify-center items-center gap-4">
                             <button
                                 onClick={() => setEmergencyFilterActive(!emergencyFilterActive)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 border-2 ${
@@ -127,13 +147,40 @@ const DirectoryPage: React.FC<DirectoryPageProps> = ({ clinics, selectedClinic, 
                                 <AlertTriangle className="h-4 w-4" />
                                 Emergency Clinics
                             </button>
+                             <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-slate-400">Sort by:</span>
+                                <div className="flex items-center gap-1 rounded-full bg-slate-700 border-2 border-slate-600 p-1">
+                                    <button
+                                        onClick={() => setSortBy('name')}
+                                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${
+                                            sortBy === 'name' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-600'
+                                        }`}
+                                        aria-pressed={sortBy === 'name'}
+                                        aria-label="Sort by name alphabetically"
+                                    >
+                                        <ArrowDownAZ className="h-4 w-4" />
+                                        Name
+                                    </button>
+                                    <button
+                                        onClick={() => setSortBy('rating')}
+                                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${
+                                            sortBy === 'rating' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-600'
+                                        }`}
+                                        aria-pressed={sortBy === 'rating'}
+                                        aria-label="Sort by Google rating, highest first"
+                                    >
+                                        <Star className="h-4 w-4" />
+                                        Rating
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
 
                     <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredClinics.length > 0 ? (
-                            filteredClinics.map((clinic, index) => (
+                        {filteredAndSortedClinics.length > 0 ? (
+                            filteredAndSortedClinics.map((clinic, index) => (
                                 <ClinicCard
                                     key={`${clinic.name}-${index}`}
                                     clinic={clinic}

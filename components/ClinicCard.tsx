@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Clinic } from '../types';
-import { Hospital, MapPin, Phone, Clock, ExternalLink, Star, ChevronRight } from 'lucide-react';
+import { Hospital, MapPin, Phone, ExternalLink, Star, ChevronRight } from 'lucide-react';
 
 interface ClinicCardProps {
   clinic: Clinic;
@@ -29,6 +29,8 @@ const ClinicCard: React.FC<ClinicCardProps> = ({ clinic, onSelect }) => {
   useEffect(() => {
     setImageError(false);
   }, [clinic.photoUrl]);
+
+  const isValidWebsiteUrl = clinic.websiteUrl && (clinic.websiteUrl.startsWith('http://') || clinic.websiteUrl.startsWith('https://'));
 
   const isEmergency = (clinic.categories || []).some(cat =>
     ['urgent care', 'emergency', '24-hour'].includes(cat.toLowerCase())
@@ -87,6 +89,21 @@ const ClinicCard: React.FC<ClinicCardProps> = ({ clinic, onSelect }) => {
               {clinic.phone}
             </a>
           </div>
+          {isValidWebsiteUrl && (
+            <div className="flex items-center">
+              <ExternalLink className="h-5 w-5 mr-3 flex-shrink-0 text-slate-400" />
+              <a
+                href={clinic.websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-blue-400 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`Visit website for ${clinic.name}`}
+              >
+                Visit Website
+              </a>
+            </div>
+          )}
           {clinic.googleRating && clinic.googleReviewCount ? (
             <div className="flex items-center">
               <Star className="h-5 w-5 mr-3 flex-shrink-0 text-slate-400" />

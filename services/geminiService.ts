@@ -1,5 +1,11 @@
+import { GoogleGenAI } from "@google/genai";
 import { Clinic } from '../types';
 import { supabase } from './supabaseClient';
+
+// Initialize the Google Gemini AI client.
+// The API key is sourced from environment variables as per project configuration.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+
 
 /**
  * Parses a PostgreSQL array string or a simple comma-separated string 
@@ -115,7 +121,7 @@ export async function fetchClinics(): Promise<FetchClinicsResult> {
             categories: Array.from(allCategories),
             photoUrl: clinic.photo_url || clinic['photo_url'] || clinic['Photo URL'],
             hours: clinic.hours || clinic['Hours'],
-            websiteUrl: clinic.website_url || clinic['website_url'] || clinic['Website URL'] || clinic.website,
+            websiteUrl: clinic.site || clinic.website_url || clinic['website_url'] || clinic['Website URL'] || clinic.website,
             googleRating: clinic.google_rating || clinic['google_rating'] || clinic['Google Rating'] || clinic.rating,
             googleReviewCount: clinic.google_review_count || clinic['google_review_count'] || clinic['Google Review Count'] || clinic.reviews,
             googleMapsUrl: clinic.google_maps_url || clinic['google_maps_url'] || clinic['Google Maps URL'],
@@ -143,4 +149,37 @@ export async function fetchClinics(): Promise<FetchClinicsResult> {
   clinics.sort((a, b) => a.name.localeCompare(b.name));
   
   return { clinics, source };
+}
+
+/**
+ * Generates a short, friendly description for a clinic using the Gemini API.
+ * @param clinic The clinic object.
+ * @returns A promise that resolves to a string description.
+ */
+export async function generateClinicDescription(clinic: Clinic): Promise<string> {
+  try {
+    const isEmergency = (clinic.categories || []).some(cat => 
+      ['emergency', 'urgent care', '24-hour'].includes(cat.toLowerCase())
+    );
+
+    const prompt = `Write a short, friendly, and informative description for a veterinary clinic, approximately 30-40 words.
+    
+    Clinic Name: "${clinic.name}"
+    Location: "${clinic.city}, WI"
+    Services: "${clinic.categories.join(', ')}"
+    
+    Based on these details, describe the clinic to a potential customer looking for pet care. ${isEmergency ? "Emphasize their capacity to handle urgent situations or emergencies." : "Mention they provide dedicated care for local pets."}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+    
+    return response.text.trim();
+
+  } catch (error) {
+    console.error("Error generating clinic description with Gemini API:", error);
+    // Return a graceful fallback message
+    return `Visit ${clinic.name} in ${clinic.city} for professional veterinary services, including ${clinic.categories.join(', ').toLowerCase()}. Contact them directly for more information on the specific animals they treat.`;
+  }
 }

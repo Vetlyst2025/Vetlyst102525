@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clinic } from '../types';
 import { Hospital, MapPin, Phone, ChevronLeft, ExternalLink, Clock, Star, Send } from 'lucide-react';
+import { generateClinicDescription } from '../services/geminiService';
 
 interface ClinicDetailProps {
   clinic: Clinic;
@@ -8,7 +9,7 @@ interface ClinicDetailProps {
 }
 
 const CategoryBubble: React.FC<{ category: string }> = ({ category }) => {
-    const categoryStyles: { [key: string]: string } = {
+    const categoryStyles: { [key:string]: string } = {
         'Emergency': 'bg-red-900/50 text-red-300 border-red-700/50',
         'Urgent Care': 'bg-orange-900/50 text-orange-300 border-orange-700/50',
         '24-Hour': 'bg-blue-900/50 text-blue-300 border-blue-700/50',
@@ -22,14 +23,43 @@ const CategoryBubble: React.FC<{ category: string }> = ({ category }) => {
     );
 };
 
+const DescriptionLoader: React.FC = () => (
+  <div className="space-y-2 animate-pulse bg-slate-800/50 p-4 rounded-md">
+    <div className="h-4 bg-slate-700 rounded w-full"></div>
+    <div className="h-4 bg-slate-700 rounded w-3/4"></div>
+  </div>
+);
+
+
 const ClinicDetail: React.FC<ClinicDetailProps> = ({ clinic, onBack }) => {
   const [imageError, setImageError] = useState(false);
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [description, setDescription] = useState<string>('');
+  const [isLoadingDescription, setIsLoadingDescription] = useState(true);
 
   useEffect(() => {
     setImageError(false);
     setFormSubmitted(false);
+
+    const fetchDescription = async () => {
+      if (clinic) {
+        setIsLoadingDescription(true);
+        try {
+          const desc = await generateClinicDescription(clinic);
+          setDescription(desc);
+        } catch (error) {
+          console.error("Failed to generate clinic description:", error);
+          // Set a user-friendly fallback message on error
+          setDescription(`Visit ${clinic.name} in ${clinic.city} for professional veterinary services. Contact them directly for more information on the specific animals they treat.`);
+        } finally {
+          setIsLoadingDescription(false);
+        }
+      }
+    };
+
+    fetchDescription();
   }, [clinic]);
+
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,6 +128,22 @@ const ClinicDetail: React.FC<ClinicDetailProps> = ({ clinic, onBack }) => {
                         </a>
                     </div>
                 )}
+                
+                <div className="mt-6">
+                    {isLoadingDescription ? (
+                        <DescriptionLoader />
+                    ) : (
+                        <div>
+                            <blockquote className="border-l-4 border-blue-500 pl-4 py-2 bg-slate-800/50 rounded-r-md">
+                                <p className="text-slate-300">{description}</p>
+                            </blockquote>
+                            <p className="text-xs text-slate-400 text-right mt-2 italic">
+                                AI-generated summary based on public information.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
 
                 <div className="space-y-4 text-base text-slate-300 border-t border-slate-600 pt-6 mt-6">
                     <div className="flex items-start">
